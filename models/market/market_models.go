@@ -1,7 +1,10 @@
 package market
 
 import (
+	"encoding/json"
+	"fmt"
 	"github.com/gitcodeporter/okex-sdk"
+	"strconv"
 )
 
 type (
@@ -21,7 +24,7 @@ type (
 		SodUtc0   string              `json:"sodUtc0"`
 		SodUtc8   string              `json:"sodUtc8"`
 		InstType  okex.InstrumentType `json:"instType"`
-		TS        int64               `json:"ts"`
+		Ts        int64               `json:"ts"`
 	}
 	IndexTicker struct {
 		InstID  string `json:"instId"`
@@ -31,18 +34,18 @@ type (
 		Open24h string `json:"open24h"`
 		SodUtc0 string `json:"sodUtc0"`
 		SodUtc8 string `json:"sodUtc8"`
-		TS      int64  `json:"ts"`
+		Ts      int64  `json:"ts"`
 	}
 	OrderBook struct {
 		Asks []*OrderBookEntity `json:"asks"`
 		Bids []*OrderBookEntity `json:"bids"`
-		TS   int64              `json:"ts"`
+		Ts   int64              `json:"ts"`
 	}
 	OrderBookWs struct {
 		Asks     []*OrderBookEntity `json:"asks"`
 		Bids     []*OrderBookEntity `json:"bids"`
 		Checksum int                `json:"checksum"`
-		TS       int64              `json:"ts"`
+		Ts       int64              `json:"ts"`
 	}
 	OrderBookEntity struct {
 		DepthPrice      string
@@ -66,7 +69,7 @@ type (
 		H  string
 		L  string
 		C  string
-		TS int64
+		Ts int64
 	}
 	Trade struct {
 		InstID  string         `json:"instId"`
@@ -74,18 +77,18 @@ type (
 		Px      string         `json:"px"`
 		Sz      string         `json:"sz"`
 		Side    okex.TradeSide `json:"side,string"`
-		TS      int64          `json:"ts"`
+		Ts      int64          `json:"ts"`
 	}
 	TotalVolume24H struct {
 		VolUsd string `json:"volUsd"`
 		VolCny string `json:"volCny"`
-		TS     int64  `json:"ts"`
+		Ts     int64  `json:"ts"`
 	}
 	IndexComponent struct {
 		Index      string       `json:"index"`
 		Last       string       `json:"last"`
 		Components []*Component `json:"components"`
-		TS         int64        `json:"ts"`
+		Ts         int64        `json:"ts"`
 	}
 	Component struct {
 		Exch   string `json:"exch"`
@@ -95,3 +98,89 @@ type (
 		CnvPx  string `json:"cnvPx"`
 	}
 )
+
+func (c *Candle) UnmarshalJSON(buf []byte) error {
+	var (
+		o, h, l, cl, vol, volCcy, ts, vcq, confirm string
+		err                                        error
+	)
+	tmp := []interface{}{&ts, &o, &h, &l, &cl, &vol, &volCcy, &vcq, &confirm}
+	wantLen := len(tmp)
+	if err := json.Unmarshal(buf, &tmp); err != nil {
+		return err
+	}
+
+	if g, e := len(tmp), wantLen; g != e {
+		return fmt.Errorf("wrong number of fields in Candle: %d != %d", g, e)
+	}
+
+	timestamp, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
+		return err
+	}
+	c.Ts = timestamp
+	c.O = o
+	c.H = h
+	c.L = l
+	c.C = cl
+	c.Vol = vol
+	c.VolCcy = volCcy
+	c.VolCcyQuote = vcq
+	c.Confirm = confirm
+	return nil
+}
+
+func (c *IndexCandle) UnmarshalJSON(buf []byte) error {
+	var (
+		o, h, l, cl, ts, crm string
+		err                  error
+	)
+	tmp := []interface{}{&ts, &o, &h, &l, &cl, &crm}
+	wantLen := len(tmp)
+	if err := json.Unmarshal(buf, &tmp); err != nil {
+		return err
+	}
+
+	if g, e := len(tmp), wantLen; g != e {
+		return fmt.Errorf("wrong number of fields in Candle: %d != %d", g, e)
+	}
+
+	timestamp, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
+		return err
+	}
+	c.Ts = timestamp
+	c.O = o
+	c.H = h
+	c.L = l
+	c.C = cl
+	return nil
+}
+
+func (o *OrderBookEntity) UnmarshalJSON(buf []byte) error {
+	var (
+		dp, s, lo, on string
+		err           error
+	)
+	tmp := []interface{}{&dp, &s, &lo, &on}
+	wantLen := len(tmp)
+	if err := json.Unmarshal(buf, &tmp); err != nil {
+		return err
+	}
+
+	if g, e := len(tmp), wantLen; g != e {
+		return fmt.Errorf("wrong number of fields in OrderBookEntity: %d != %d", g, e)
+	}
+	o.DepthPrice = dp
+	o.Size = s
+	o.LiquidatedOrder, err = strconv.Atoi(lo)
+	if err != nil {
+		return err
+	}
+	o.OrderNumbers, err = strconv.Atoi(on)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
