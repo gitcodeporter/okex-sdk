@@ -105,27 +105,28 @@ func (c *Public) UOpenInterest(req requests.OpenInterest, rCh ...bool) error {
 	return c.Unsubscribe(false, []okex.ChannelName{"open-interest"}, m)
 }
 
+func (c *Public) SetCandlesticksCh(ch chan *public.Candlesticks) {
+	c.cCh = ch
+}
+
 // Candlesticks
 // Retrieve the open interest. Data will by pushed every 3 seconds.
 //
 // https://www.okex.com/docs-v5/en/#websocket-api-public-channels-candlesticks-channel
-func (c *Public) Candlesticks(req requests.Candlesticks, ch ...chan *public.Candlesticks) error {
-	m := okex.S2M(req)
-	if len(ch) > 0 {
-		c.cCh = ch[0]
-	}
-	return c.Subscribe(false, []okex.ChannelName{}, m)
+func (c *Public) Candlesticks(req []requests.Candlesticks) error {
+	args := okex.Slice2M(req)
+	return c.Send(false, okex.SubscribeOperation, args)
 }
 
 // UCandlesticks
 //
 // https://www.okex.com/docs-v5/en/#websocket-api-public-channels-candlesticks-channel
-func (c *Public) UCandlesticks(req requests.Candlesticks, rCh ...bool) error {
-	m := okex.S2M(req)
-	if len(rCh) > 0 && rCh[0] {
+func (c *Public) UCandlesticks(req []requests.Candlesticks, rCh bool) error {
+	args := okex.Slice2M(req)
+	if rCh {
 		c.cCh = nil
 	}
-	return c.Unsubscribe(false, []okex.ChannelName{}, m)
+	return c.Send(false, okex.UnsubscribeOperation, args)
 }
 
 // Trades

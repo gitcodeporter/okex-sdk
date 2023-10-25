@@ -417,6 +417,12 @@ func S2M(i interface{}) map[string]string {
 	m := make(map[string]string)
 	j, _ := json.Marshal(i)
 	_ = json.Unmarshal(j, &m)
+	return m
+}
 
+func Slice2M(i interface{}) []map[string]string {
+	m := []map[string]string{}
+	j, _ := json.Marshal(i)
+	_ = json.Unmarshal(j, &m)
 	return m
 }
