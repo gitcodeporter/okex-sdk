@@ -7,7 +7,8 @@ type (
 		InstType okex.InstrumentType `json:"instType"`
 	}
 	Tickers struct {
-		InstID string `json:"instId"`
+		InstID  string `json:"instId"`
+		Channel string `json:"channel"`
 	}
 	OpenInterest struct {
 		InstID string `json:"instId"`

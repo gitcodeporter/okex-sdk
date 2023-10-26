@@ -75,7 +75,7 @@ func (c *Public) Tickers(req []requests.Tickers) error {
 // UTickers
 //
 // https://www.okex.com/docs-v5/en/#websocket-api-public-channels-tickers-channel
-func (c *Public) UTickers(req requests.Tickers, rCh bool) error {
+func (c *Public) UTickers(req []requests.Tickers, rCh bool) error {
 	args := okex.Slice2M(req)
 	if rCh {
 		c.tCh = nil
