@@ -59,27 +59,28 @@ func (c *Public) UInstruments(req requests.Instruments, rCh ...bool) error {
 	return c.Unsubscribe(false, []okex.ChannelName{"instruments"}, m)
 }
 
+func (c *Public) SetTickersCh(ch chan *public.Tickers) {
+	c.tCh = ch
+}
+
 // Tickers
 // Retrieve the last traded price, bid price, ask price and 24-hour trading volume of instruments. Data will be pushed every 100 ms.
 //
 // https://www.okex.com/docs-v5/en/#websocket-api-public-channels-tickers-channel
-func (c *Public) Tickers(req requests.Tickers, ch ...chan *public.Tickers) error {
-	m := okex.S2M(req)
-	if len(ch) > 0 {
-		c.tCh = ch[0]
-	}
-	return c.Subscribe(false, []okex.ChannelName{"tickers"}, m)
+func (c *Public) Tickers(req []requests.Tickers) error {
+	args := okex.Slice2M(req)
+	return c.Send(false, okex.SubscribeOperation, args)
 }
 
 // UTickers
 //
 // https://www.okex.com/docs-v5/en/#websocket-api-public-channels-tickers-channel
-func (c *Public) UTickers(req requests.Tickers, rCh ...bool) error {
-	m := okex.S2M(req)
-	if len(rCh) > 0 && rCh[0] {
+func (c *Public) UTickers(req requests.Tickers, rCh bool) error {
+	args := okex.Slice2M(req)
+	if rCh {
 		c.tCh = nil
 	}
-	return c.Unsubscribe(false, []okex.ChannelName{"tickers"}, m)
+	return c.Send(false, okex.UnsubscribeOperation, args)
 }
 
 // OpenInterest
