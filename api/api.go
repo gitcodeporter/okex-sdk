@@ -19,6 +19,7 @@ func NewClient(ctx context.Context, apiKey, secretKey, passphrase string, destin
 	restURL := okex.RestURL
 	wsPubURL := okex.PublicWsURL
 	wsPriURL := okex.PrivateWsURL
+	wsBusURL := okex.BusinessWsURL
 	switch destination {
 	case okex.AwsServer:
 		restURL = okex.AwsRestURL
@@ -29,9 +30,11 @@ func NewClient(ctx context.Context, apiKey, secretKey, passphrase string, destin
 		wsPubURL = okex.DemoPublicWsURL
 		wsPriURL = okex.DemoPrivateWsURL
 	}
-
 	r := rest.NewClient(apiKey, secretKey, passphrase, restURL, destination)
-	c := ws.NewClient(ctx, apiKey, secretKey, passphrase, map[bool]okex.BaseURL{true: wsPriURL, false: wsPubURL})
-
+	c := ws.NewClient(ctx, apiKey, secretKey, passphrase, map[okex.URLType]okex.BaseURL{
+		okex.PublicURL:   wsPubURL,
+		okex.PrivateURL:  wsPriURL,
+		okex.BusinessURL: wsBusURL,
+	})
 	return &Client{r, c, ctx}, nil
 }

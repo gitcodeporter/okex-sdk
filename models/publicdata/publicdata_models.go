@@ -22,8 +22,8 @@ type (
 		InstType  okex.InstrumentType  `json:"instType"`
 		Category  okex.FeeCategory     `json:"category,string"`
 		OptType   okex.OptionType      `json:"optType,omitempty"`
-		ListTime  int64                `json:"listTime"`
-		ExpTime   int64                `json:"expTime,omitempty"`
+		ListTime  string               `json:"listTime"`
+		ExpTime   string               `json:"expTime,omitempty"`
 		CtType    okex.ContractType    `json:"ctType,omitempty"`
 		Alias     okex.AliasType       `json:"alias,omitempty"`
 		State     okex.InstrumentState `json:"state"`

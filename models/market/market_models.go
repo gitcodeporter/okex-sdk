@@ -24,7 +24,7 @@ type (
 		SodUtc0   string              `json:"sodUtc0"`
 		SodUtc8   string              `json:"sodUtc8"`
 		InstType  okex.InstrumentType `json:"instType"`
-		Ts        int64               `json:"ts"`
+		Ts        string              `json:"ts"`
 	}
 	IndexTicker struct {
 		InstID  string `json:"instId"`

@@ -11,6 +11,7 @@ import (
 )
 
 type (
+	URLType              string
 	BaseURL              string
 	InstrumentType       string
 	MarginMode           string
@@ -57,9 +58,14 @@ const (
 	AwsServer
 	DemoServer
 
-	RestURL      = BaseURL("https://www.okx.com")
-	PublicWsURL  = BaseURL("wss://ws.okx.com:8443/ws/v5/public")
-	PrivateWsURL = BaseURL("wss://ws.okx.com:8443/ws/v5/private")
+	PublicURL   = URLType("public")
+	PrivateURL  = URLType("private")
+	BusinessURL = URLType("business")
+
+	RestURL       = BaseURL("https://www.okx.com")
+	PublicWsURL   = BaseURL("wss://ws.okx.com:8443/ws/v5/public")
+	PrivateWsURL  = BaseURL("wss://ws.okx.com:8443/ws/v5/private")
+	BusinessWsURL = BaseURL("wss://ws.okx.com:8443/ws/v5/business")
 
 	AwsRestURL      = BaseURL("https://aws.okx.com")
 	AwsPublicWsURL  = BaseURL("wss://wsaws.okx.com:8443/ws/v5/public")
