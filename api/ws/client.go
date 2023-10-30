@@ -61,7 +61,7 @@ func NewClient(ctx context.Context, apiKey, secretKey, passphrase string, url ma
 		ctx:                 ctx,
 		Cancel:              cancel,
 		url:                 url,
-		sendChan:            map[okex.URLType]chan []byte{okex.PublicURL: make(chan []byte, 3), okex.BusinessURL: make(chan []byte, 3), okex.PrivateURL: make(chan []byte, 3)},
+		sendChan:            map[okex.URLType]chan []byte{okex.PublicURL: make(chan []byte, 30), okex.BusinessURL: make(chan []byte, 30), okex.PrivateURL: make(chan []byte, 30)},
 		DoneChan:            make(chan interface{}),
 		StructuredEventChan: make(chan interface{}),
 		RawEventChan:        make(chan *events.Basic),
@@ -225,7 +225,12 @@ func (c *ClientWs) WaitForAuthorization() error {
 
 func (c *ClientWs) dial(p okex.URLType) error {
 	c.mu[p].Lock()
-	conn, res, err := websocket.DefaultDialer.Dial(string(c.url[p]), nil)
+	Dialer := websocket.Dialer{
+		Proxy:             http.ProxyFromEnvironment,
+		HandshakeTimeout:  45 * time.Second,
+		EnableCompression: false,
+	}
+	conn, res, err := Dialer.Dial(string(c.url[p]), nil)
 	if err != nil {
 		var statusCode int
 		if res != nil {
@@ -235,16 +240,21 @@ func (c *ClientWs) dial(p okex.URLType) error {
 		return fmt.Errorf("error %d: %w", statusCode, err)
 	}
 	defer res.Body.Close()
+	conn.SetReadLimit(655350)
 	go func() {
 		err := c.receiver(p)
 		if err != nil {
+			_ = conn.Close()
 			fmt.Printf("receiver error: %v\n", err)
+			_ = c.handleCancel("ws socket interrupt")
 		}
 	}()
 	go func() {
 		err := c.sender(p)
 		if err != nil {
+			_ = conn.Close()
 			fmt.Printf("sender error: %v\n", err)
+			_ = c.handleCancel("ws socket interrupt")
 		}
 	}()
 	c.conn[p] = conn
@@ -252,7 +262,7 @@ func (c *ClientWs) dial(p okex.URLType) error {
 	return nil
 }
 func (c *ClientWs) sender(p okex.URLType) error {
-	ticker := time.NewTicker(time.Second * 5)
+	ticker := time.NewTicker(time.Second * 8)
 	defer ticker.Stop()
 	for {
 		select {
@@ -281,9 +291,7 @@ func (c *ClientWs) sender(p okex.URLType) error {
 		case <-ticker.C:
 			//if c.conn[p] != nil && (c.lastTransmit[p] == nil || (c.lastTransmit[p] != nil && time.Since(*c.lastTransmit[p]) > PingPeriod)) {
 			if c.conn[p] != nil {
-				go func() {
-					c.sendChan[p] <- []byte("ping")
-				}()
+				c.sendChan[p] <- []byte("ping")
 			}
 		case <-c.ctx.Done():
 			return c.handleCancel("sender")
@@ -305,9 +313,9 @@ func (c *ClientWs) receiver(p okex.URLType) error {
 			mt, data, err := c.conn[p].ReadMessage()
 			if err != nil {
 				c.mu[p].RUnlock()
-				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				/*if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 					return c.conn[p].Close()
-				}
+				}*/
 				return err
 			}
 			c.mu[p].RUnlock()
