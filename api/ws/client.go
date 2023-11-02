@@ -291,6 +291,7 @@ func (c *ClientWs) sender(p okex.URLType) error {
 		case <-ticker.C:
 			//if c.conn[p] != nil && (c.lastTransmit[p] == nil || (c.lastTransmit[p] != nil && time.Since(*c.lastTransmit[p]) > PingPeriod)) {
 			if c.conn[p] != nil {
+				fmt.Println("ws sender ping")
 				c.sendChan[p] <- []byte("ping")
 			}
 		case <-c.ctx.Done():
