@@ -19,21 +19,21 @@ import (
 //
 // https://www.okex.com/docs-v5/en/#websocket-api
 type ClientWs struct {
-	Cancel              context.CancelFunc
-	DoneChan            chan interface{}
-	StructuredEventChan chan interface{}
-	RawEventChan        chan *events.Basic
-	ErrChan             chan *events.Error
-	SubscribeChan       chan *events.Subscribe
-	UnsubscribeCh       chan *events.Unsubscribe
-	LoginChan           chan *events.Login
-	SuccessChan         chan *events.Success
-	sendChan            map[okex.URLType]chan []byte
-	url                 map[okex.URLType]okex.BaseURL
-	conn                map[okex.URLType]*websocket.Conn
-	apiKey              string
-	secretKey           []byte
-	passphrase          string
+	Cancel   context.CancelFunc
+	DoneChan chan interface{}
+	//StructuredEventChan chan interface{}
+	//RawEventChan  chan *events.Basic
+	ErrChan       chan *events.Error
+	SubscribeChan chan *events.Subscribe
+	UnsubscribeCh chan *events.Unsubscribe
+	LoginChan     chan *events.Login
+	SuccessChan   chan *events.Success
+	sendChan      map[okex.URLType]chan []byte
+	url           map[okex.URLType]okex.BaseURL
+	conn          map[okex.URLType]*websocket.Conn
+	apiKey        string
+	secretKey     []byte
+	passphrase    string
 	//lastTransmit        map[okex.URLType]*time.Time
 	mu            map[okex.URLType]*sync.RWMutex
 	AuthRequested *time.Time
@@ -43,6 +43,8 @@ type ClientWs struct {
 	Trade         *Trade
 	ctx           context.Context
 }
+
+const RECONNECT = "%s ws socket reconnect"
 
 const (
 	redialTick = 2 * time.Second
@@ -55,17 +57,17 @@ const (
 func NewClient(ctx context.Context, apiKey, secretKey, passphrase string, url map[okex.URLType]okex.BaseURL) *ClientWs {
 	ctx, cancel := context.WithCancel(ctx)
 	c := &ClientWs{
-		apiKey:              apiKey,
-		secretKey:           []byte(secretKey),
-		passphrase:          passphrase,
-		ctx:                 ctx,
-		Cancel:              cancel,
-		url:                 url,
-		sendChan:            map[okex.URLType]chan []byte{okex.PublicURL: make(chan []byte, 30), okex.BusinessURL: make(chan []byte, 30), okex.PrivateURL: make(chan []byte, 30)},
-		DoneChan:            make(chan interface{}),
-		StructuredEventChan: make(chan interface{}),
-		RawEventChan:        make(chan *events.Basic),
-		conn:                make(map[okex.URLType]*websocket.Conn),
+		apiKey:     apiKey,
+		secretKey:  []byte(secretKey),
+		passphrase: passphrase,
+		ctx:        ctx,
+		Cancel:     cancel,
+		url:        url,
+		sendChan:   map[okex.URLType]chan []byte{okex.PublicURL: make(chan []byte, 30), okex.BusinessURL: make(chan []byte, 30), okex.PrivateURL: make(chan []byte, 30)},
+		DoneChan:   make(chan interface{}),
+		//StructuredEventChan: make(chan interface{}),
+		//RawEventChan: make(chan *events.Basic),
+		conn: make(map[okex.URLType]*websocket.Conn),
 		//lastTransmit:        make(map[okex.URLType]*time.Time),
 		mu: map[okex.URLType]*sync.RWMutex{okex.PublicURL: {}, okex.BusinessURL: {}, okex.PrivateURL: {}},
 	}
@@ -241,32 +243,66 @@ func (c *ClientWs) dial(p okex.URLType) error {
 	}
 	defer res.Body.Close()
 	conn.SetReadLimit(655350)
+	stopC := make(chan byte, 1)
+	doneC := make(chan byte)
 	go func() {
-		err := c.receiver(p)
+		defer func() {
+			_ = recover()
+		}()
+		err := c.receiver(p, stopC)
 		if err != nil {
-			_ = conn.Close()
 			fmt.Printf("receiver error: %v\n", err)
-			_ = c.handleCancel("ws socket interrupt")
+			stopC <- 1
+			if c.conn[p] != nil {
+				close(doneC)
+			} else {
+				close(stopC)
+			}
 		}
 	}()
 	go func() {
-		err := c.sender(p)
+		defer func() {
+			_ = recover()
+		}()
+		err := c.sender(p, stopC)
 		if err != nil {
-			_ = conn.Close()
 			fmt.Printf("sender error: %v\n", err)
-			_ = c.handleCancel("ws socket interrupt")
+			stopC <- 1
+			if c.conn[p] != nil {
+				close(doneC)
+			} else {
+				close(stopC)
+			}
+		}
+	}()
+	go func() {
+		select {
+		case <-doneC:
+			if conn != nil {
+				_ = conn.Close()
+			}
+			c.conn[p] = nil
+			_ = c.handleCancel(fmt.Sprintf(RECONNECT, p))
+			if len(stopC) > 0 {
+				_ = <-stopC
+			} else {
+				close(stopC)
+			}
 		}
 	}()
 	c.conn[p] = conn
 	c.mu[p].Unlock()
 	return nil
 }
-func (c *ClientWs) sender(p okex.URLType) error {
+func (c *ClientWs) sender(p okex.URLType, stop chan byte) error {
 	ticker := time.NewTicker(time.Second * 8)
 	defer ticker.Stop()
 	for {
 		select {
 		case data := <-c.sendChan[p]:
+			if c.conn[p] == nil {
+				return fmt.Errorf("ws connect is closed")
+			}
 			c.mu[p].RLock()
 			err := c.conn[p].SetWriteDeadline(time.Now().Add(writeWait))
 			if err != nil {
@@ -296,15 +332,22 @@ func (c *ClientWs) sender(p okex.URLType) error {
 			}
 		case <-c.ctx.Done():
 			return c.handleCancel("sender")
+		case <-stop:
+			return nil
 		}
 	}
 }
-func (c *ClientWs) receiver(p okex.URLType) error {
+func (c *ClientWs) receiver(p okex.URLType, stop chan byte) error {
 	for {
 		select {
 		case <-c.ctx.Done():
 			return c.handleCancel("receiver")
+		case <-stop:
+			return nil
 		default:
+			if c.conn[p] == nil {
+				return fmt.Errorf("ws connect is closed")
+			}
 			c.mu[p].RLock()
 			err := c.conn[p].SetReadDeadline(time.Now().Add(pongWait))
 			if err != nil {
